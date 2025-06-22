@@ -8,9 +8,17 @@ from werkzeug.utils import secure_filename
 import json
 from datetime import datetime
 import random  # For mock predictions
+from flask import send_file
+from fpdf import FPDF
+from rules import ATTACK_RULES 
+import io
+from urllib.parse import unquote
 
 app = Flask(__name__)
 CORS(app)
+
+# Simpan hasil analisis terakhir untuk PDF
+last_upload_threats = []
 
 # Konfigurasi database SQLite
 app.config["SQLALCHEMY_DATABASE_URI"] = (
@@ -52,7 +60,7 @@ class LogAnalysis(db.Model):
 with app.app_context():
     db.create_all()
 
-
+"""
 # Muat aturan dari file JSON (rule-based)
 def load_rules():
     return {
@@ -75,29 +83,32 @@ def load_rules():
 
 
 ATTACK_RULES = load_rules()
+"""
 
 
 # Fungsi deteksi berbasis aturan
 def detect_threats(line):
-    threats = []
+    decoded_line = unquote(line)  # Decode URL encoding
+
     for attack_type, config in ATTACK_RULES.items():
         for pattern in config["patterns"]:
-            if re.match(pattern, line, re.IGNORECASE):
-                threats.append(
-                    {
-                        "type": attack_type,
-                        "severity": config["severity"],
-                        "match": pattern,
-                    }
-                )
-                break  # Hentikan jika sudah cocok dengan satu pola
-    return threats
+            if re.search(pattern, decoded_line, re.IGNORECASE):
+                return [{
+                    "type": attack_type,
+                    "severity": config["severity"],
+                    "match": pattern,
+                }]
+    return [{
+        "type": "Normal",
+        "severity": "None",
+        "match": None
+    }]
 
 
 # Mock ML prediction function
 def predict_log(line):
     # Simulate ML prediction - in a real app, this would use a trained model
-    threat_types = ["SQL Injection", "XSS", "Brute-Force", "Malware", "Normal"]
+    threat_types = ["SQL Injection", "XSS", "Brute-Force", "Normal"]
     # 70% chance of being normal, 30% chance of threat
     if random.random() < 0.3:
         threat = random.choice(threat_types[:-1])  # Exclude "Normal"
@@ -172,6 +183,10 @@ def upload_file():
         # Gabungkan hasil
         combined_threats = threats + ml_predictions
 
+        global last_upload_threats
+        last_upload_threats = combined_threats
+
+
         # Simpan ke database
         for threat in combined_threats:
             log_entry = LogAnalysis(
@@ -230,6 +245,104 @@ def home():
         <li>GET /api/history - Get analysis history</li>
     </ul>
     """
+
+@app.route('/download_summary', methods=['GET'])
+def download_summary():
+    logs = LogAnalysis.query.all()
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Log Summary (5W1H)", ln=True, align="C")
+    pdf.ln(10)
+
+    for i, log in enumerate(logs, start=1):
+        # Who: Ambil IP dari log
+        ip_matches = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', log.log_line)
+        who_info = ip_matches[0] if ip_matches else "Tidak diketahui"
+
+        # Deteksi rule
+        matched = get_matching_rule(log.log_line)
+        why_info = matched["reason"] if matched else "Tidak diketahui"
+        how_info = matched["method"] if matched else "Tidak diketahui"
+
+        pdf.set_font("Arial", style="B", size=12)
+        pdf.cell(200, 10, txt=f"Log #{i}", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(0, 10, txt=f"""What : {log.threat_type}
+When : {log.timestamp}
+Where: {log.log_line[:100]}...
+Why  : {why_info}
+Who  : {who_info}
+How  : {how_info}
+""")
+        pdf.ln(5)
+
+    pdf_output = io.BytesIO()
+    # pdf.output(pdf_output)
+    # pdf_output.seek(0)
+
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    pdf_output = io.BytesIO(pdf_bytes)
+
+    pdf_output.seek(0)
+
+    return send_file(pdf_output, as_attachment=True, download_name="log_summary_5W1H.pdf")
+
+@app.route("/download_pdf", methods=["GET"])
+def download_pdf():
+    if not last_upload_threats:
+        return jsonify({"error": "Belum ada hasil analisis"}), 400
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Log Analyze Result (5W1H)", ln=True, align="C")
+    pdf.ln(10)
+
+    for i, threat in enumerate(last_upload_threats, start=1):
+        # Who: Ambil IP dari baris log
+        ip_matches = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', threat["line"])
+        who_info = ip_matches[0] if ip_matches else "Tidak diketahui"
+
+        # Ambil info pola yang cocok dan cara serang (how)
+        matched = get_matching_rule(threat["line"])
+        why_info = matched["reason"] if matched else "Log tidak cocok dengan pola serangan apa pun."
+        how_info = matched["method"] if matched else "Tidak ada indikasi aktivitas mencurigakan atau teknik serangan."
+
+        pdf.set_font("Arial", style="B", size=12)
+        pdf.cell(200, 10, txt=f"Log #{i}", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(0, 10, txt=f"""What : {threat["type"]}
+When : {threat["timestamp"]}
+Where: {threat["line"][:100]}...
+Why  : {why_info}
+Who  : {who_info}
+How  : {how_info}
+""")
+        pdf.ln(5)
+
+    # Output PDF ke memori
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    pdf_output = io.BytesIO(pdf_bytes)
+    pdf_output.seek(0)
+
+    return send_file(pdf_output, as_attachment=True, download_name="log_analyze_result.pdf")
+
+
+def get_matching_rule(log_line):
+    for rule_name, rule_data in ATTACK_RULES.items():
+        for pattern in rule_data.get("patterns", []):
+            if re.search(pattern, log_line, re.IGNORECASE):
+                return {
+                    "name": rule_name,
+                    "severity": rule_data.get("severity", "Unknown"),
+                    "weight": rule_data.get("weight", 0.5),
+                    "reason": f"Kecocokan pola: {pattern}",
+                    "method": rule_data.get("how", rule_name)
+                }
+    return None
+
 
 
 if __name__ == "__main__":

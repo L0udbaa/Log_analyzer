@@ -1,5 +1,4 @@
 # Contoh file konfigurasi aturan (rules.py)
-# Dapat dikembangkan menjadi file JSON external untuk fleksibilitas
 ATTACK_RULES = {
     "SQL Injection": {
         "patterns": [
@@ -8,7 +7,8 @@ ATTACK_RULES = {
             r".*xp_cmdshell.*$"  # SQL Server spesifik
         ],
         "severity": "High",
-        "weight": 0.8  # Bobot untuk scoring
+        "weight": 0.8,
+        "how": "Dengan menyisipkan perintah SQL ke dalam input aplikasi, penyerang mencoba memanipulasi query database untuk mencuri atau merusak data."
     },
     "Brute-Force": {
         "patterns": [
@@ -17,23 +17,24 @@ ATTACK_RULES = {
             r".*Invalid user.*$"
         ],
         "severity": "Medium",
-        "weight": 0.6
+        "weight": 0.6,
+        "how": "Melibatkan percobaan login berulang kali menggunakan kombinasi username dan password yang berbeda untuk mendapatkan akses ilegal."
     },
     "XSS": {
         "patterns": [
-            r".*<script>.*<\/script>.*$",
-            r".*(onerror=|onload=).*\(\).*",
-            r".*javascript:.*$"
+            r"(?i)<\s*script.*?>.*?<\s*/\s*script\s*>",
+            r"(?i)on\w+\s*=\s*['\"].*?['\"]",
+            r"(?i)javascript\s*:",
+            r"(?i)<\s*img[^>]*(onerror|onload)\s*=",
+            r"(?i)<\s*iframe",
+            r"(?i)<\s*svg.*on\w+\s*=",
+            r"(?i)document\.cookie",
+            r"(?i)window\.location",
+            r"(?i)eval\s*\(",
+            r"(?i)alert\s*\("
         ],
         "severity": "Medium",
-        "weight": 0.5
-    },
-    "Directory Traversal": {
-        "patterns": [
-            r".*(\.\.\/|\.\.\\).*",
-            r".*root\/.*"
-        ],
-        "severity": "High",
-        "weight": 0.7
+        "weight": 0.5,
+        "how": "Dengan menyisipkan skrip berbahaya ke dalam halaman web, penyerang dapat mencuri cookie, mengarahkan ulang pengguna, atau melakukan aksi atas nama korban."
     }
 }
