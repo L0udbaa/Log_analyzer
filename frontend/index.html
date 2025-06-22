@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Log Analysis System</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+      rel="stylesheet" />
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+      .log-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border-left: 5px solid #0d6efd;
+      }
+      .log-card:hover {
+        transform: scale(1.01);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      .threat-badge {
+        font-size: 0.8rem;
+        padding: 0.4em 0.6em;
+      }
+      .card-title i {
+        margin-right: 8px;
+      }
+      .section-header {
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-left: 5px solid #0d6efd;
+        padding-left: 12px;
+        font-size: 1.3rem;
+        color: #343a40;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-5">
+      <h1 class="mb-4 text-primary text-center">
+        <i class="bi bi-shield-lock-fill"></i> Log Analysis System
+      </h1>
+
+      <!-- Upload Section -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title">
+            <i class="bi bi-upload"></i> Upload Log File
+          </h5>
+          <div class="row g-3 align-items-center">
+            <div class="col-md-8">
+              <input
+                type="file"
+                id="logFile"
+                class="form-control"
+                accept=".log,.txt" />
+            </div>
+            <div class="col-md-4">
+              <button id="uploadBtn" class="btn btn-primary w-100" disabled>
+                <i class="bi bi-cloud-arrow-up"></i> Submit
+              </button>
+            </div>
+          </div>
+          <div id="progress" class="mt-3 d-none">
+            <div class="spinner-border text-primary me-2" role="status"></div>
+            <span class="text-muted">Processing log file...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <div id="results" style="display: none">
+        <div class="row mb-4">
+          <div class="col-md-4">
+            <div class="card text-bg-primary text-center shadow-sm">
+              <div class="card-body">
+                <h6 class="card-title">Total Logs</h6>
+                <p class="display-5" id="totalLogs">0</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card text-bg-danger text-center shadow-sm">
+              <div class="card-body">
+                <h6 class="card-title">High Risk</h6>
+                <p class="display-5" id="highRisk">0</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card text-bg-warning text-center shadow-sm">
+              <div class="card-body">
+                <h6 class="card-title">Medium Risk</h6>
+                <p class="display-5" id="mediumRisk">0</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+          <div
+            class="card-header d-flex justify-content-between align-items-center">
+            <span class="section-header">Threat Detection Results</span>
+            <span class="badge bg-dark rounded-pill" id="threatCount">0</span>
+          </div>
+          <div class="card-body">
+            <div id="threatList" class="row g-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Section -->
+      <div class="card shadow-sm">
+        <div
+          class="card-header d-flex justify-content-between align-items-center">
+          <span class="section-header">Analysis History</span>
+          <button id="refreshHistory" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Log Line</th>
+                  <th>Threat Type</th>
+                  <th>Severity</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable">
+                <!-- JS fills this -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+      document
+        .getElementById("logFile")
+        .addEventListener("change", function (e) {
+          document.getElementById("uploadBtn").disabled =
+            !e.target.files.length;
+        });
+
+      document
+        .getElementById("uploadBtn")
+        .addEventListener("click", async function () {
+          const fileInput = document.getElementById("logFile");
+          const file = fileInput.files[0];
+
+          if (!file) {
+            alert("Please select a file first");
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append("logfile", file);
+
+          try {
+            document.getElementById("progress").classList.remove("d-none");
+            document.getElementById("uploadBtn").disabled = true;
+
+            const response = await fetch("http://localhost:5000/api/upload", {
+              method: "POST",
+              body: formData,
+            });
+
+            const result = await response.json();
+            document.getElementById("progress").classList.add("d-none");
+
+            if (!response.ok) {
+              throw new Error(result.error || "Upload failed");
+            }
+
+            document.getElementById("totalLogs").textContent = result.totalLogs;
+            document.getElementById("highRisk").textContent =
+              result.summary.high_risk;
+            document.getElementById("mediumRisk").textContent =
+              result.summary.medium_risk;
+            document.getElementById("threatCount").textContent =
+              result.threats.length;
+
+            document.getElementById("results").style.display = "block";
+
+            const threatList = document.getElementById("threatList");
+            threatList.innerHTML = "";
+
+            result.threats.forEach((threat) => {
+              const severityClass =
+                threat.severity === "High" ? "bg-danger" : "bg-warning";
+              const confidenceBadge = threat.confidence
+                ? `<span class="badge bg-info ms-2">${threat.confidence}</span>`
+                : "";
+
+              threatList.innerHTML += `
+              <div class="col-md-6">
+                <div class="card log-card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">${threat.type}</h6>
+                    <p class="card-text">${threat.line}</p>
+                    <span class="badge ${severityClass} threat-badge">${threat.severity}</span>
+                    ${confidenceBadge}
+                    <span class="badge bg-secondary threat-badge ms-1">${threat.source}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            });
+
+            fetchHistory();
+          } catch (error) {
+            alert("Error: " + error.message);
+            console.error(error);
+          } finally {
+            fileInput.value = "";
+            document.getElementById("uploadBtn").disabled = false;
+          }
+        });
+
+      async function fetchHistory() {
+        try {
+          const response = await fetch("http://localhost:5000/api/history");
+          const history = await response.json();
+          const historyTable = document.getElementById("historyTable");
+          historyTable.innerHTML = "";
+
+          if (history.length === 0) {
+            historyTable.innerHTML =
+              '<tr><td colspan="5" class="text-center">No history available</td></tr>';
+            return;
+          }
+
+          history.forEach((entry) => {
+            const severityClass =
+              entry.severity === "High" ? "text-danger" : "text-warning";
+            historyTable.innerHTML += `
+              <tr>
+                <td>${new Date(entry.timestamp).toLocaleString()}</td>
+                <td>${entry.log_line}</td>
+                <td>${entry.threat_type}</td>
+                <td><span class="${severityClass}">${entry.severity}</span></td>
+                <td>${entry.source}</td>
+              </tr>
+            `;
+          });
+        } catch (error) {
+          console.error("Error fetching history:", error);
+          document.getElementById("historyTable").innerHTML =
+            '<tr><td colspan="5" class="text-center text-danger">Failed to load history</td></tr>';
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        fetchHistory();
+      });
+
+      document
+        .getElementById("refreshHistory")
+        .addEventListener("click", fetchHistory);
+    </script>
+  </body>
+</html>
