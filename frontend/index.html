@@ -105,6 +105,14 @@
             class="card-header d-flex justify-content-between align-items-center">
             <span class="section-header">Threat Detection Results</span>
             <span class="badge bg-dark rounded-pill" id="threatCount">0</span>
+            <!--
+            <a href="https://a700-2001-448a-7100-1fbf-ccf1-454f-35b6-d24f.ngrok-free.app/download_pdf" target="_blank" style="margin-left: 10px;">
+              -->
+              <a href="http://localhost:5000/download_pdf" target="_blank" style="margin-left: 10px;"></a>
+              <button class="btn btn-sm btn-success">
+                Download 5W1H PDF
+              </button>
+            </a>
           </div>
           <div class="card-body">
             <div id="threatList" class="row g-3"></div>
@@ -144,6 +152,8 @@
 
     <!-- JavaScript -->
     <script>
+      //const HOST = 'https://a700-2001-448a-7100-1fbf-ccf1-454f-35b6-d24f.ngrok-free.app'
+      const HOST = 'http://localhost:5000'
       document
         .getElementById("logFile")
         .addEventListener("change", function (e) {
@@ -169,8 +179,12 @@
             document.getElementById("progress").classList.remove("d-none");
             document.getElementById("uploadBtn").disabled = true;
 
-            const response = await fetch("http://localhost:5000/api/upload", {
+            //const response = await fetch("http://localhost:5000/api/upload", {
+            const response = await fetch(`${HOST}/api/upload`, {
               method: "POST",
+              headers: {
+                'ngrok-skip-browser-warning': 'true'
+              },
               body: formData,
             });
 
@@ -228,7 +242,12 @@
 
       async function fetchHistory() {
         try {
-          const response = await fetch("http://localhost:5000/api/history");
+          //const response = await fetch("http://localhost:5000/api/history");
+          const response = await fetch(`${HOST}/api/history`, {
+              headers: {
+                'ngrok-skip-browser-warning': 'true'
+              },
+            });
           const history = await response.json();
           const historyTable = document.getElementById("historyTable");
           historyTable.innerHTML = "";
