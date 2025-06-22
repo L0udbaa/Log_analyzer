@@ -297,7 +297,7 @@ def download_pdf():
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Log Summary (5W1H)", ln=True, align="C")
+    pdf.cell(200, 10, txt="Log Analyze Result (5W1H)", ln=True, align="C")
     pdf.ln(10)
 
     for i, threat in enumerate(last_upload_threats, start=1):
@@ -327,7 +327,7 @@ How  : {how_info}
     pdf_output = io.BytesIO(pdf_bytes)
     pdf_output.seek(0)
 
-    return send_file(pdf_output, as_attachment=True, download_name="log_summary_5W1H.pdf")
+    return send_file(pdf_output, as_attachment=True, download_name="log_analyze_result.pdf")
 
 
 def get_matching_rule(log_line):
