@@ -60,31 +60,6 @@ class LogAnalysis(db.Model):
 with app.app_context():
     db.create_all()
 
-"""
-# Muat aturan dari file JSON (rule-based)
-def load_rules():
-    return {
-        "SQL Injection": {
-            "patterns": [
-                r".*('.+--|UNION|SELECT|DROP).*$",
-                r".*(%27|%22|').*(%3D|=|%3B).*",  # URL-encoded SQLi
-            ],
-            "severity": "High",
-        },
-        "Brute-Force": {
-            "patterns": [r".*POST.*\/login.*401.*$", r".*Failed password for.*$"],
-            "severity": "Medium",
-        },
-        "XSS": {
-            "patterns": [r".*<script>.*<\/script>.*$", r".*(onerror=|onload=).*\(\).*"],
-            "severity": "Medium",
-        },
-    }
-
-
-ATTACK_RULES = load_rules()
-"""
-
 
 # Fungsi deteksi berbasis aturan
 def detect_threats(line):
@@ -245,49 +220,6 @@ def home():
         <li>GET /api/history - Get analysis history</li>
     </ul>
     """
-
-@app.route('/download_summary', methods=['GET'])
-def download_summary():
-    logs = LogAnalysis.query.all()
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Log Summary (5W1H)", ln=True, align="C")
-    pdf.ln(10)
-
-    for i, log in enumerate(logs, start=1):
-        # Who: Ambil IP dari log
-        ip_matches = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', log.log_line)
-        who_info = ip_matches[0] if ip_matches else "Tidak diketahui"
-
-        # Deteksi rule
-        matched = get_matching_rule(log.log_line)
-        why_info = matched["reason"] if matched else "Tidak diketahui"
-        how_info = matched["method"] if matched else "Tidak diketahui"
-
-        pdf.set_font("Arial", style="B", size=12)
-        pdf.cell(200, 10, txt=f"Log #{i}", ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.multi_cell(0, 10, txt=f"""What : {log.threat_type}
-When : {log.timestamp}
-Where: {log.log_line[:100]}...
-Why  : {why_info}
-Who  : {who_info}
-How  : {how_info}
-""")
-        pdf.ln(5)
-
-    pdf_output = io.BytesIO()
-    # pdf.output(pdf_output)
-    # pdf_output.seek(0)
-
-    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-    pdf_output = io.BytesIO(pdf_bytes)
-
-    pdf_output.seek(0)
-
-    return send_file(pdf_output, as_attachment=True, download_name="log_summary_5W1H.pdf")
 
 @app.route("/download_pdf", methods=["GET"])
 def download_pdf():
